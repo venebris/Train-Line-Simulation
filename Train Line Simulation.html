@@ -1,0 +1,1006 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Train Line Simulation</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: Inter, "Avenir Next", Avenir, "Segoe UI", sans-serif;
+      color: #17243a;
+      background: #f3f6fa;
+      font-synthesis: none;
+      text-rendering: optimizeLegibility;
+      --ink: #17243a;
+      --muted: #66758b;
+      --line: #e0e7f0;
+      --blue: #2864dc;
+      --green: #15966a;
+      --red: #d84856;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-width: 320px; }
+    .page-shell { width: min(1120px, calc(100% - 40px)); margin: 0 auto; padding: 38px 0 48px; }
+    .page-header { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-bottom: 26px; }
+    .eyebrow { margin: 0 0 8px; color: var(--blue); font-size: 11px; font-weight: 800; letter-spacing: .14em; }
+    h1 { margin: 0; color: var(--ink); font-size: clamp(28px, 4vw, 38px); letter-spacing: -.04em; line-height: 1.1; }
+    .subtitle { margin: 10px 0 0; color: var(--muted); font-size: 15px; line-height: 1.5; }
+    .panel { border: 1px solid var(--line); border-radius: 18px; background: #fff; box-shadow: 0 8px 26px rgb(23 36 58 / 5%); }
+    .settings-panel { padding: 22px 24px 24px; margin-bottom: 20px; }
+    .section-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+    h2 { margin: 0; color: var(--ink); font-size: 18px; letter-spacing: -.02em; }
+    .section-note { color: var(--muted); font-size: 13px; }
+    .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 16px; }
+    .input-group { margin: 0 0 20px; padding: 0; border: 0; }
+    .input-group:last-of-type { margin-bottom: 0; }
+    .input-group legend { width: 100%; margin-bottom: 13px; padding: 0 0 9px; border-bottom: 1px solid var(--line); color: var(--blue); font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+    .controls label { display: grid; grid-template-rows: minmax(2.7em, auto) 42px auto; align-content: start; gap: 7px; color: #34435a; font-size: 13px; font-weight: 700; line-height: 1.35; }
+    .input-title { display: block; }
+    .controls input { width: 100%; min-height: 42px; padding: 9px 11px; border: 1px solid #d5deea; border-radius: 9px; outline: none; background: #fbfcfe; color: var(--ink); font: inherit; font-size: 15px; font-weight: 600; transition: border-color .15s, box-shadow .15s, background .15s; }
+    .controls input:focus { border-color: var(--blue); background: #fff; box-shadow: 0 0 0 3px rgb(40 100 220 / 13%); }
+    .controls small { color: var(--muted); font-size: 11px; font-weight: 400; line-height: 1.45; }
+    .form-footer { margin-top: 18px; }
+    .shortcut-note { color: var(--muted); font-size: 12px; line-height: 1.8; }
+    .status { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 999px; background: #fff; color: #37506b; font-size: 12px; font-weight: 700; }
+    .status::before { width: 8px; height: 8px; border-radius: 50%; background: var(--green); content: ""; }
+    .status.paused::before { background: #e6a23c; }
+    .map-panel { padding: 22px 22px 16px; }
+    .map-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 0 4px 12px; }
+    .map-kicker { color: var(--muted); font-size: 12px; }
+    .map-frame { overflow: hidden; border: 1px solid #e7edf5; border-radius: 12px; background: #fff; }
+    canvas { display: block; width: 100%; max-width: 100%; height: auto; }
+    .detail-grid { margin-top: 20px; }
+    .legend-panel { padding: 20px 22px; }
+    .legend-symbol {
+      position: relative;
+      display: inline-block;
+      width: 18px;
+      height: 10px;
+      flex: 0 0 auto;
+      margin-right: 0;
+      vertical-align: middle;
+      border-radius: 5px;
+    }
+    .legend-symbol.local { background: var(--blue); }
+    .legend-symbol.express { background: var(--green); }
+    .legend-symbol.waiting { background: var(--red); }
+    .legend-symbol.local::after,
+    .legend-symbol.express::after,
+    .legend-symbol.waiting::after {
+      position: absolute;
+      top: 50%;
+      right: 4px;
+      width: 4px;
+      height: 4px;
+      transform: translateY(-50%);
+      border-radius: 50%;
+      background: white;
+      content: "";
+    }
+    .legend-symbol.station {
+      width: 12px;
+      height: 12px;
+      border: 2px solid white;
+      border-radius: 50%;
+      box-shadow: 0 0 0 1px #9aa8ba;
+    }
+    .legend-symbol.express-stop { background: var(--green); }
+    .legend-symbol.local-stop { background: #000; }
+    .legend-symbol.section-gap {
+      width: 5px;
+      height: 15px;
+      margin-left: 7px;
+      background: white;
+      box-shadow: 0 0 0 1px #aab6c6;
+    }
+    #legend { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; margin-top: 16px; color: #43536a; font-size: 12px; line-height: 1.4; }
+    .legend-item { display: grid; grid-template-columns: 18px minmax(0, 1fr); align-items: center; gap: 9px; min-width: 0; }
+    .legend-symbol { justify-self: center; }
+    .legend-label { min-width: 0; }
+    .how-it-works { margin-bottom: 20px; padding: 22px 24px; }
+    .how-it-works p { margin: 12px 0 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
+    .how-it-works p:first-of-type { margin-top: 14px; }
+    .how-it-works strong { color: #34435a; }
+    kbd { padding: 2px 6px; border: 1px solid #d9e1eb; border-radius: 5px; background: #f7f9fc; color: #34435a; font: inherit; font-size: 11px; font-weight: 700; }
+    @media (max-width: 680px) {
+      .page-shell { width: min(100% - 24px, 560px); padding-top: 24px; }
+      .page-header { align-items: flex-start; flex-direction: column; gap: 14px; }
+      .settings-panel, .map-panel, .legend-panel, .how-it-works { padding: 17px; }
+      .section-heading, .map-heading { align-items: flex-start; flex-direction: column; gap: 5px; }
+      .controls { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; }
+      #legend { grid-template-columns: 1fr; }
+      .form-footer { align-items: flex-start; flex-direction: column; }
+    }
+    @media (max-width: 400px) {
+      .controls { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page-shell">
+    <header class="page-header">
+      <div>
+        <p class="eyebrow">RAIL OPERATIONS · LIVE SIMULATION</p>
+        <h1>Train Line Simulation</h1>
+        <p class="subtitle">A simple view of local and express services sharing one line.</p>
+      </div>
+      <p id="status" class="status running" role="status" aria-live="polite">Running</p>
+    </header>
+    <section class="panel how-it-works" aria-labelledby="service-title">
+      <h2 id="service-title">How the line works</h2>
+      <p><strong>Track and signals.</strong> Local trains stay on the light grey main line and stop at every station. Express trains move onto a lower passing loop at stations they skip. The main line and loop have separate signal occupancy, so an express can use the loop in a section while a local uses the main line in that same section. Near a loop exit, the train closer to the next signal section goes first; if they are equally close, the express has priority. The local waits at its station when yielding, and the express continues to the loop exit.</p>
+      <p><strong>Services.</strong> Local trains call at every station. Express trains always call at the first and final stations, and stop at the intermediate stations listed in the settings. They use the lower track to bypass all other intermediate stations. The first express is scheduled after the configured delay. The time between trains is the minimum interval between scheduled departures; if the first signal section is occupied, the next departure stays queued off the map until the section clears.</p>
+      <p><strong>Movement.</strong> Acceleration / deceleration and top speed control how quickly trains travel. Dwell time is how long a train waits at a stop. Simulation speed controls how quickly the animation advances in real time; at 1x, it advances about 30 simulated seconds per real second.</p>
+      <p><strong>Controls.</strong> Change settings, then press <kbd>R</kbd> to restart with them. Press <kbd>Space</kbd> to pause or resume. <kbd>←</kbd> and <kbd>→</kbd> pause and move backward or forward by five simulation steps.</p>
+    </section>
+    <section class="panel settings-panel" aria-labelledby="settings-title">
+      <div class="section-heading">
+        <h2 id="settings-title">Simulation settings</h2>
+        <span class="section-note">Press R to restart with updated settings.</span>
+      </div>
+      <form id="controls">
+        <fieldset class="input-group">
+          <legend>Track / Line</legend>
+          <div class="controls">
+            <label>
+              <span class="input-title">Number of stations (1–15)</span>
+              <input name="stationCount" type="number" min="1" max="15" step="1" value="8" required>
+              <small>Total stations along the route, from 1 to 15. The first station is the starting point.</small>
+            </label>
+            <label>
+              <span class="input-title">Distance between stations (m)</span>
+              <input name="stationSpacing" type="number" min="400" step="any" value="1500" required>
+              <small>Distance from one station to the next.</small>
+            </label>
+            <label>
+              <span class="input-title">Signal section length (m)</span>
+              <input name="signalSectionLength" type="number" min="1" step="any" value="1500" required>
+              <small>Section length outside loop sidings. Loop entrances and exits are also boundaries.</small>
+            </label>
+            <label>
+              <span class="input-title">Horizontal loop length (m)</span>
+              <input name="loopHorizontalLength" type="number" min="1" step="any" value="1000" required>
+              <small>Horizontal width of the loop. Estimated track length is 1.2 times this width to allow for curved ends; the diagram's vertical spacing is illustrative.</small>
+            </label>
+          </div>
+        </fieldset>
+        <fieldset class="input-group">
+          <legend>Train / Movement</legend>
+          <div class="controls">
+          <label>
+            <span class="input-title">Acceleration / deceleration (m/s²)</span>
+            <input name="accelerationDeceleration" type="number" min="0.01" step="any" value="1" required>
+            <small>How quickly a train speeds up or slows down. Higher values do both more quickly.</small>
+          </label>
+          <label>
+            <span class="input-title">Top speed (m/s)</span>
+            <input name="topSpeed" type="number" min="0.01" step="any" value="30" required>
+            <small>The fastest speed a train is allowed to travel. The value is in metres per second.</small>
+          </label>
+          <label>
+            <span class="input-title">Dwell time (s)</span>
+            <input name="dwellSeconds" type="number" min="0" step="any" value="30" required>
+            <small>How long a train waits at each station before continuing.</small>
+          </label>
+          <label>
+            <span class="input-title">Express departure delay (s)</span>
+            <input name="expressDelay" type="number" min="0" step="any" value="60" required>
+            <small>How long after the first local train the first express train leaves.</small>
+          </label>
+          <label>
+            <span class="input-title">Express stations</span>
+            <input name="expressStations" type="text" value="4, 7" inputmode="numeric" autocomplete="off">
+            <small>Intermediate station numbers where the express stops, separated by commas. It always stops at the first and final stations; other intermediate stations are bypassed on the loop.</small>
+          </label>
+          <label>
+            <span class="input-title">Time between trains (s)</span>
+            <input name="departureInterval" type="number" min="1" step="any" value="250" required>
+            <small>Minimum time between departures for each service. Departures stay queued off the map until the first signal section is clear.</small>
+          </label>
+          </div>
+        </fieldset>
+        <fieldset class="input-group">
+          <legend>Other</legend>
+          <div class="controls">
+            <label>
+              <span class="input-title">Simulation speed (x)</span>
+              <input name="speed" type="number" min="0.01" step="any" value="1" required>
+              <small>1x advances about 30 simulated seconds per real second.</small>
+            </label>
+          </div>
+        </fieldset>
+        <div class="form-footer">
+          <span class="shortcut-note"><kbd>R</kbd> restart <span aria-hidden="true">·</span> <kbd>Space</kbd> pause / resume <span aria-hidden="true">·</span> <kbd>←</kbd> step back <span aria-hidden="true">·</span> <kbd>→</kbd> step forward</span>
+        </div>
+      </form>
+    </section>
+    <section class="panel map-panel" aria-labelledby="map-title">
+      <div class="map-heading">
+        <h2 id="map-title">Line map</h2>
+        <span class="map-kicker">All stations on the main line · passing loops shown below</span>
+      </div>
+      <div class="map-frame"><canvas id="c" width="900" height="250" aria-label="Animated train line map"></canvas></div>
+    </section>
+    <div class="detail-grid">
+      <section class="panel legend-panel" aria-labelledby="legend-title">
+        <h2 id="legend-title">Map key</h2>
+        <div id="legend" aria-label="Legend">
+          <div class="legend-item"><span class="legend-symbol local"></span><span class="legend-label">Local train</span></div>
+          <div class="legend-item"><span class="legend-symbol express"></span><span class="legend-label">Express train</span></div>
+          <div class="legend-item"><span class="legend-symbol waiting"></span><span class="legend-label">Train waiting for a track section to clear</span></div>
+          <div class="legend-item"><span class="legend-symbol station express-stop"></span><span class="legend-label">Express stop</span></div>
+          <div class="legend-item"><span class="legend-symbol station local-stop"></span><span class="legend-label">Local-only stop / express passing loop</span></div>
+          <div class="legend-item"><span class="legend-symbol section-gap"></span><span class="legend-label">Signal section boundary</span></div>
+        </div>
+      </section>
+    </div>
+  </main>
+  <script>
+    const BASE_STEP_SECONDS = 0.5;
+    const LOOP_TRANSITION_SECONDS = 12;
+    const LOOP_TRACK_Y = 138;
+    const MAIN_TRACK_Y = 110;
+    const STEPS_PER_FRAME = 1;
+    const MAX_HISTORY = 7200;
+    const MAX_HISTORY_TRAIN_STATES = 250000;
+    const HISTORY_RETENTION_SECONDS = 30;
+    const TRAIN_LENGTH = 200;
+    const LOOP_EXIT_TRANSITION_SECONDS = 2;
+    const form = document.getElementById('controls');
+    const status = document.getElementById('status');
+    const ctx = document.getElementById('c').getContext('2d');
+    let config;
+    let stationCount;
+    let expressStops;
+    let loopStations;
+    let sectionBoundaries;
+    let trains;
+    let paused;
+    let time;
+    let localDepartures;
+    let expressDepartures;
+    let history;
+    let historyIndex;
+
+    function stationPosition(index) {
+      return index * config.stationSpacing;
+    }
+
+    function makeTrain(kind, departure, stops, startTime) {
+      return { id: `${kind === 'local' ? 'L' : 'E'}${departure + 1}`,
+               kind, color: kind === 'local' ? '#2864dc' : '#15966a',
+               stops, next: 0, pos: 0, v: 0, dwell: 0,
+               startTime, done: false, held: false, track: 'waitingStart',
+               loopProgress: 0 };
+    }
+
+    function restart() {
+      validateExpressStations();
+      validateLoopHorizontalLength();
+      if (!form.reportValidity()) return;
+      config = {
+        stationCount: Number(form.elements.stationCount.value),
+        accelerationDeceleration: Number(form.elements.accelerationDeceleration.value),
+        topSpeed: Number(form.elements.topSpeed.value),
+        signalSectionLength: Number(form.elements.signalSectionLength.value),
+        loopHorizontalLength: Number(form.elements.loopHorizontalLength.value),
+        speed: Number(form.elements.speed.value),
+        dwellSeconds: Number(form.elements.dwellSeconds.value),
+        stepSeconds: Number(form.elements.speed.value) * BASE_STEP_SECONDS,
+        stationSpacing: Number(form.elements.stationSpacing.value),
+        expressDelay: Number(form.elements.expressDelay.value),
+        departureInterval: Number(form.elements.departureInterval.value)
+      };
+      stationCount = config.stationCount;
+      const selectedExpressStops = parseExpressStations();
+      expressStops = [...new Set([0, ...selectedExpressStops, stationCount - 1])]
+        .sort((a, b) => a - b);
+      loopStations = Array.from({ length: Math.max(0, stationCount - 2) }, (_, index) =>
+        index + 1
+      ).filter(index => !selectedExpressStops.includes(index));
+      sectionBoundaries = buildSectionBoundaries();
+      trains = [];
+      localDepartures = 0;
+      expressDepartures = 0;
+      time = 0;
+      paused = false;
+      history = [];
+      historyIndex = -1;
+      saveHistory();
+      status.textContent = 'Running';
+      status.className = 'status running';
+      draw();
+    }
+
+    function validateLoopHorizontalLength() {
+      const input = form.elements.loopHorizontalLength;
+      const horizontalLength = Number(input.value);
+      const stationSpacing = Number(form.elements.stationSpacing.value);
+      input.setCustomValidity(
+        horizontalLength >= stationSpacing
+          ? 'Loop horizontal length must be shorter than the distance between stations.'
+          : ''
+      );
+    }
+
+    function parseExpressStations() {
+      const input = form.elements.expressStations;
+      if (!input.value.trim()) return [];
+      return input.value.split(',').map(value => Number(value.trim()) - 1);
+    }
+
+    function validateExpressStations() {
+      const input = form.elements.expressStations;
+      const values = input.value.trim()
+        ? input.value.split(',').map(value => value.trim())
+        : [];
+      const stationTotal = Number(form.elements.stationCount.value);
+      const invalidFormat = values.some(value => !/^\d+$/.test(value));
+      const stationNumbers = values.map(Number);
+      const invalidStation = stationNumbers.some(number =>
+        number < 2 || number >= stationTotal
+      );
+      const duplicateStation = new Set(stationNumbers).size !== stationNumbers.length;
+      input.setCustomValidity(
+        invalidFormat || invalidStation || duplicateStation
+          ? `Enter unique intermediate station numbers from 2 to ${stationTotal - 1}, separated by commas.`
+          : ''
+      );
+    }
+
+    function createScheduledTrains() {
+      if (stationCount < 2) return;
+      while (localDepartures * config.departureInterval <= time) {
+        const stops = Array.from({ length: stationCount - 1 }, (_, index) => index + 1);
+        trains.push(makeTrain('local', localDepartures, stops,
+          localDepartures * config.departureInterval));
+        localDepartures++;
+      }
+      while (config.expressDelay + expressDepartures * config.departureInterval <= time) {
+        trains.push(makeTrain('express', expressDepartures, expressStops,
+          config.expressDelay + expressDepartures * config.departureInterval));
+        expressDepartures++;
+      }
+    }
+
+    function finishTrain(train) {
+      train.done = true;
+      train.doneAt = time;
+    }
+
+    function saveHistory() {
+      if (historyIndex < history.length - 1) {
+        history.splice(historyIndex + 1);
+      }
+      history.push(structuredClone({
+        time, trains, localDepartures, expressDepartures
+      }));
+      const historyLimit = Math.max(
+        120,
+        Math.min(MAX_HISTORY, Math.floor(MAX_HISTORY_TRAIN_STATES / Math.max(1, trains.length)))
+      );
+      while (history.length > historyLimit) history.shift();
+      historyIndex = history.length - 1;
+    }
+
+    function restoreHistory(index) {
+      if (index < 0 || index >= history.length) return;
+      historyIndex = index;
+      const snapshot = structuredClone(history[index]);
+      time = snapshot.time;
+      trains = snapshot.trains;
+      localDepartures = snapshot.localDepartures;
+      expressDepartures = snapshot.expressDepartures;
+      draw();
+    }
+
+    function step() {
+      if (historyIndex < history.length - 1) {
+        history.splice(historyIndex + 1);
+      }
+      const previousTime = time;
+      time += config.stepSeconds;
+      createScheduledTrains();
+      const loopPriorities = determineLoopPriorities();
+
+      for (const t of trains) {
+        if (t.done || time < t.startTime) continue;
+        t.held = false;
+        const elapsed = time - Math.max(previousTime, t.startTime);
+        if (t.track === 'waitingStart') {
+          if (!isFirstSignalSectionClear() || !canEnterMainAt(t, 0)) {
+            t.held = true;
+            continue;
+          }
+          t.track = 'main';
+        }
+        if (t.track === 'enteringLoop') {
+          t.loopProgress = Math.min(1, t.loopProgress + elapsed / LOOP_TRANSITION_SECONDS);
+          if (t.loopProgress === 1) {
+            t.track = 'loop';
+            t.pos = stationPosition(t.loopStation);
+            t.track = 'approachingLoopExit';
+            t.loopProgress = 0;
+          }
+          continue;
+        }
+        if (t.track === 'loop') {
+          t.track = 'approachingLoopExit';
+          t.loopProgress = 0;
+          continue;
+        }
+        if (t.track === 'approachingLoopExit') {
+          t.loopProgress = Math.min(1, t.loopProgress + elapsed / LOOP_TRANSITION_SECONDS);
+          if (t.loopProgress === 1) t.track = 'waitingLoopExit';
+          continue;
+        }
+        if (t.track === 'waitingLoopExit') {
+          const exitPosition = stationPosition(t.loopStation) +
+            loopHalfWidth() / trackScale();
+          const mergePosition = exitPosition + TRAIN_LENGTH / 2 + 0.01;
+          const priority = t.loopPriority;
+          if (priority?.priority === 'local') {
+            const local = trains.find(train => train.id === priority.localId);
+            const sectionEnd = sectionBoundaries[priority.section + 1];
+            if (local && !local.done &&
+                local.pos - TRAIN_LENGTH / 2 < sectionEnd) {
+              t.held = true;
+              continue;
+            }
+          }
+          const clearToRejoin = canEnterMainAt(t, mergePosition, exitPosition);
+          if (!clearToRejoin) {
+            t.held = true;
+            continue;
+          }
+          t.track = 'leavingLoop';
+          t.loopProgress = 0;
+          continue;
+        }
+        if (t.track === 'leavingLoop') {
+          t.loopProgress = Math.min(
+            1, t.loopProgress + elapsed / LOOP_EXIT_TRANSITION_SECONDS
+          );
+          if (t.loopProgress === 1) {
+            t.track = 'main';
+            t.pos = stationPosition(t.loopStation) +
+              loopHalfWidth() / trackScale() + TRAIN_LENGTH / 2 + 0.01;
+          }
+          continue;
+        }
+        if (t.dwell > 0) {
+          t.dwell = Math.max(0, t.dwell - elapsed);
+          continue;
+        }
+        if (t.yieldingFor) {
+          const express = trains.find(train => train.id === t.yieldingFor);
+          const sectionEnd = sectionBoundaries[t.yieldSection + 1];
+          if (express && !express.done &&
+              !(express.track === 'main' &&
+                mainPosition(express) - TRAIN_LENGTH / 2 >= sectionEnd)) {
+            t.held = true;
+            continue;
+          }
+          delete t.yieldingFor;
+          delete t.yieldSection;
+        }
+
+        const stopPos = stationPosition(t.stops[t.next]);
+        const vStop = Math.sqrt(2 * config.accelerationDeceleration * Math.max(0, stopPos - t.pos));
+        const vTarget = Math.min(config.topSpeed, vStop);
+
+        if (t.v < vTarget) {
+          t.v = Math.min(vTarget, t.v + config.accelerationDeceleration * elapsed);
+        } else {
+          t.v = Math.max(vTarget, t.v - config.accelerationDeceleration * elapsed);
+        }
+        let nextPosition = t.pos + t.v * elapsed;
+        const bypassStation = expressBypassStation(t, stopPos);
+        const switchPosition = bypassStation === undefined
+          ? undefined
+          : stationPosition(bypassStation) - loopHalfWidth() / trackScale();
+        if (t.track === 'main') {
+          const movement = advanceToClearSection(t, nextPosition, switchPosition);
+          nextPosition = movement.position;
+          t.held = movement.held;
+        }
+        if (t.track === 'main' && bypassStation !== undefined &&
+            switchPosition !== undefined) {
+          const loopEntryPosition = switchPosition - TRAIN_LENGTH / 2;
+          if (nextPosition >= loopEntryPosition) {
+            nextPosition = loopEntryPosition;
+            if (t.pos >= loopEntryPosition - 1 &&
+                canEnterLoop(t, switchPosition, bypassStation)) {
+              t.pos = loopEntryPosition;
+              t.v = 0;
+              t.track = 'enteringLoop';
+              t.loopStation = bypassStation;
+              t.loopProgress = 0;
+              t.held = false;
+              continue;
+            }
+            if (t.pos >= loopEntryPosition - 1) {
+              t.pos = Math.min(t.pos, loopEntryPosition - 0.01);
+              t.v = 0;
+              t.held = true;
+            }
+          }
+        }
+        const priorityForLocal = t.kind === 'local'
+          ? [...loopPriorities.values()].find(priority =>
+            priority.priority === 'express' && priority.local?.id === t.id
+          )
+          : undefined;
+        const priorityForStop = t.kind === 'local' && t.next < t.stops.length
+          ? loopPriorities.get(t.stops[t.next])
+          : undefined;
+        if (t.kind === 'local' && priorityForStop?.priority === 'express') {
+          const stationStop = stationPosition(t.stops[t.next]);
+          if (t.pos <= stationStop && nextPosition >= stationStop) {
+            nextPosition = stationStop;
+          }
+        }
+        t.pos = nextPosition;
+
+        if (t.track === 'main' && stopPos - t.pos < 1.5) {
+          const stoppedAt = t.stops[t.next];
+          t.pos = stopPos;
+          t.v = 0;
+          t.next++;
+          t.dwell = config.dwellSeconds;
+          if (priorityForLocal) {
+            t.yieldingFor = priorityForLocal.express.id;
+            t.yieldSection = priorityForLocal.section;
+          }
+          t.lastStop = stoppedAt;
+          if (t.next >= t.stops.length) finishTrain(t);
+        }
+      }
+      trains = trains.filter(train => !train.done ||
+        time - train.doneAt <= HISTORY_RETENTION_SECONDS);
+      saveHistory();
+    }
+
+    function trackScale() {
+      const routeLength = config.stationSpacing * (stationCount - 1);
+      return routeLength === 0 ? 0 : 860 / routeLength;
+    }
+
+    function loopHalfWidth() {
+      return config.loopHorizontalLength * trackScale() / 2;
+    }
+
+    function buildSectionBoundaries() {
+      const totalLength = config.stationSpacing * (stationCount - 1);
+      const loopSpans = loopStations.map(index => {
+        const center = stationPosition(index);
+        const halfWidth = loopHalfWidth() / trackScale();
+        return [center - halfWidth, center + halfWidth];
+      });
+      const boundaries = new Set([0, totalLength]);
+
+      for (let position = config.signalSectionLength; position < totalLength;
+           position += config.signalSectionLength) {
+        if (!loopSpans.some(([start, end]) => position > start && position < end)) {
+          boundaries.add(position);
+        }
+      }
+      for (const [start, end] of loopSpans) {
+        boundaries.add(start);
+        boundaries.add(end);
+      }
+
+      return [...boundaries].sort((a, b) => a - b);
+    }
+
+    function mainSectionAt(position) {
+      let section = 0;
+      while (section < sectionBoundaries.length - 2 &&
+             position >= sectionBoundaries[section + 1]) {
+        section++;
+      }
+      return section;
+    }
+
+    function occupiedSections(from, to) {
+      const first = mainSectionAt(Math.max(0, from));
+      const last = mainSectionAt(Math.max(0, to));
+      const sections = new Set();
+      for (let section = first; section <= last; section++) sections.add(section);
+      return sections;
+    }
+
+    function isFirstSignalSectionClear() {
+      return trains.every(other => {
+        if (other.done || other.startTime > time || other.track === 'waitingStart') {
+          return true;
+        }
+        const onLoop = [
+          'enteringLoop', 'loop', 'approachingLoopExit', 'waitingLoopExit'
+        ].includes(other.track);
+        const position = onLoop
+          ? (loopTrainPoint(other, trackScale(), loopHalfWidth()).x - 20) / trackScale()
+          : mainPosition(other);
+        return !occupiedSections(
+          position - TRAIN_LENGTH / 2,
+          position + TRAIN_LENGTH / 2
+        ).has(0);
+      });
+    }
+
+    function mainPosition(train) {
+      return train.track === 'leavingLoop'
+        ? stationPosition(train.loopStation) + loopHalfWidth() / trackScale() +
+          TRAIN_LENGTH / 2 + 0.01
+        : train.pos;
+    }
+
+    function expressBypassStation(train, stopPosition) {
+      if (train.kind !== 'express' || train.next >= train.stops.length) {
+        return undefined;
+      }
+      return loopStations.find(index =>
+        stationPosition(index) > train.pos &&
+        stationPosition(index) < stopPosition
+      );
+    }
+
+    function signalTrack(train) {
+      if (['enteringLoop', 'loop', 'approachingLoopExit', 'waitingLoopExit']
+        .includes(train.track)) {
+        return `loop-${train.loopStation}`;
+      }
+      if (train.kind === 'express' && train.track === 'main' &&
+          train.next < train.stops.length) {
+        const stopPosition = stationPosition(train.stops[train.next]);
+        const bypassStation = expressBypassStation(train, stopPosition);
+        if (bypassStation !== undefined) {
+          const entryPosition = stationPosition(bypassStation) -
+            loopHalfWidth() / trackScale();
+          if (train.pos + TRAIN_LENGTH / 2 >= entryPosition) {
+            return `loop-${bypassStation}`;
+          }
+        }
+      }
+      return train.track === 'waitingStart' ? 'waiting' : 'main';
+    }
+
+    function determineLoopPriorities() {
+      const priorities = new Map();
+      for (const express of trains) {
+        if (express.kind !== 'express') continue;
+        if (express.loopPriority) {
+          const sectionEnd = sectionBoundaries[express.loopPriority.section + 1];
+          if (express.track === 'main' &&
+              mainPosition(express) - TRAIN_LENGTH / 2 >= sectionEnd) {
+            delete express.loopPriority;
+            continue;
+          }
+          priorities.set(express.loopStation, {
+            ...express.loopPriority,
+            express,
+            local: trains.find(train => train.id === express.loopPriority.localId)
+          });
+          continue;
+        }
+        if (!['enteringLoop', 'loop', 'approachingLoopExit', 'waitingLoopExit']
+          .includes(express.track)) continue;
+        const station = express.loopStation;
+        const entryPosition = stationPosition(station) - loopHalfWidth() / trackScale();
+        const exitPosition = stationPosition(station) + loopHalfWidth() / trackScale();
+        const local = trains.find(train =>
+          train.kind === 'local' && !train.done && train.track === 'main' &&
+          train.pos + TRAIN_LENGTH / 2 >= entryPosition - TRAIN_LENGTH &&
+          train.pos - TRAIN_LENGTH / 2 <= exitPosition
+        );
+        if (!local) continue;
+
+        const loopPoint = loopTrainPoint(express, trackScale(), loopHalfWidth());
+        const expressFront = (loopPoint.x - 20) / trackScale() + TRAIN_LENGTH / 2;
+        const localFront = local.pos + TRAIN_LENGTH / 2;
+        const section = mainSectionAt(exitPosition + 0.01);
+        const priority = exitPosition - expressFront <= exitPosition - localFront
+          ? 'express'
+          : 'local';
+        express.loopPriority = { priority, localId: local.id, section };
+        const loopPriority = { ...express.loopPriority, express, local };
+        priorities.set(station, loopPriority);
+        if (priority === 'express' && local.lastStop === station &&
+            Math.abs(local.pos - stationPosition(station)) < 1.5) {
+          local.yieldingFor = express.id;
+          local.yieldSection = section;
+        }
+      }
+      return priorities;
+    }
+
+    function sectionOccupiedByOther(train, section) {
+      return trains.some(other => {
+        if (other === train || other.done || other.startTime > time) return false;
+        const otherTrack = signalTrack(other);
+        const trainTrack = signalTrack(train);
+        if (otherTrack === 'waiting') return false;
+        if (otherTrack !== trainTrack) return false;
+        const position = otherTrack === 'main' ? mainPosition(other) : other.pos;
+        return occupiedSections(
+          position - TRAIN_LENGTH / 2,
+          position + TRAIN_LENGTH / 2
+        ).has(section);
+      });
+    }
+
+    function advanceToClearSection(train, desiredPosition, loopEntryPosition) {
+      let position = desiredPosition;
+      const frontSection = mainSectionAt(position + TRAIN_LENGTH / 2);
+      const currentFrontSection = mainSectionAt(train.pos + TRAIN_LENGTH / 2);
+      for (let section = currentFrontSection; section <= frontSection; section++) {
+        const isLoopEntrySection = loopEntryPosition !== undefined &&
+          section === mainSectionAt(loopEntryPosition + 0.01);
+        if (isLoopEntrySection) continue;
+        if (sectionOccupiedByOther(train, section)) {
+          position = Math.min(
+            position,
+            sectionBoundaries[section] - TRAIN_LENGTH / 2 - 0.01
+          );
+          train.v = 0;
+          return { position: Math.max(train.pos, position), held: true };
+        }
+      }
+      return { position, held: false };
+    }
+
+    function canEnterLoop(train, switchPosition, loopStation) {
+      return !trains.some(other =>
+        other !== train && !other.done &&
+        other.loopStation === loopStation &&
+        ['enteringLoop', 'loop', 'approachingLoopExit', 'waitingLoopExit',
+         'leavingLoop'].includes(other.track)
+      );
+    }
+
+    function canEnterMainAt(train, position, entryBoundary = 0) {
+      const entrySection = mainSectionAt(entryBoundary + 0.01);
+      const sections = [...occupiedSections(
+        position - TRAIN_LENGTH / 2,
+        position + TRAIN_LENGTH / 2
+      )].filter(section => section >= entrySection);
+      return trains.every(other => {
+        if (other === train || other.done || other.startTime > time) return true;
+        if (signalTrack(other) !== 'main') return true;
+        const otherSections = occupiedSections(
+          mainPosition(other) - TRAIN_LENGTH / 2,
+          mainPosition(other) + TRAIN_LENGTH / 2
+        );
+        return ![...sections].some(section => otherSections.has(section));
+      });
+    }
+
+    function quadraticPoint(start, control, end, progress) {
+      const inverse = 1 - progress;
+      return {
+        x: inverse * inverse * start.x + 2 * inverse * progress * control.x +
+          progress * progress * end.x,
+        y: inverse * inverse * start.y + 2 * inverse * progress * control.y +
+          progress * progress * end.y
+      };
+    }
+
+    function loopTrainPoint(train, scale, halfWidth) {
+      const radius = Math.min(12, halfWidth / 2);
+      const lowerY = LOOP_TRACK_Y;
+      const upperCornerY = lowerY - radius;
+      const stationX = 20 + stationPosition(train.loopStation) * scale;
+      const leftX = stationX - halfWidth;
+      const rightX = stationX + halfWidth;
+      const progress = train.track === 'approachingLoopExit'
+        ? train.loopProgress * 0.7
+        : train.loopProgress;
+      if (train.track === 'enteringLoop') {
+        if (progress < 0.25) {
+          const fraction = progress / 0.25;
+          return {
+            x: leftX,
+            y: MAIN_TRACK_Y + (upperCornerY - MAIN_TRACK_Y) * fraction
+          };
+        }
+        if (progress < 0.55) {
+          const cornerProgress = (progress - 0.25) / 0.3;
+          return quadraticPoint(
+            { x: leftX, y: upperCornerY },
+            { x: leftX, y: lowerY },
+            { x: leftX + radius, y: lowerY },
+            cornerProgress
+          );
+        }
+        const fraction = (progress - 0.55) / 0.45;
+        return {
+          x: leftX + radius + (halfWidth - radius) * fraction,
+          y: lowerY
+        };
+      }
+      if (train.track === 'loop') return { x: stationX, y: lowerY };
+      if (train.track === 'waitingLoopExit') {
+        return { x: rightX, y: upperCornerY };
+      }
+      if (train.track === 'leavingLoop') {
+        return {
+          x: rightX,
+          y: upperCornerY + (MAIN_TRACK_Y - upperCornerY) * progress
+        };
+      }
+      if (train.track === 'approachingLoopExit') {
+        if (progress < 0.45) {
+          const fraction = progress / 0.45;
+          return {
+            x: stationX + (halfWidth - radius) * fraction,
+            y: lowerY
+          };
+        }
+        if (progress < 0.7) {
+          const cornerProgress = (progress - 0.45) / 0.25;
+          return quadraticPoint(
+            { x: rightX - radius, y: lowerY },
+            { x: rightX, y: lowerY },
+            { x: rightX, y: upperCornerY },
+            cornerProgress
+          );
+        }
+        if (progress < 0.85) {
+          const fraction = (progress - 0.7) / 0.15;
+          return {
+            x: rightX,
+            y: upperCornerY + (MAIN_TRACK_Y - upperCornerY) * fraction
+          };
+        }
+        return {
+          x: rightX,
+          y: MAIN_TRACK_Y
+        };
+      }
+      return { x: stationX, y: lowerY };
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, 900, 250);
+      const scale = trackScale();
+      const trackColor = '#c7ced8';
+      const halfWidth = loopHalfWidth();
+      ctx.strokeStyle = trackColor;
+      ctx.lineWidth = 5;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(20, MAIN_TRACK_Y);
+      ctx.lineTo(880, MAIN_TRACK_Y);
+      ctx.stroke();
+      ctx.lineWidth = 5;
+      for (let index = 0; index < stationCount; index++) {
+        const x = 20 + stationPosition(index) * scale;
+        const color = expressStops.includes(index) ? '#15966a' : '#17243a';
+        ctx.strokeStyle = trackColor;
+        ctx.fillStyle = color;
+        if (loopStations.includes(index)) {
+          const cornerRadius = Math.min(12, halfWidth / 2);
+          ctx.beginPath();
+          ctx.moveTo(x - halfWidth, MAIN_TRACK_Y);
+          ctx.lineTo(x - halfWidth, LOOP_TRACK_Y - cornerRadius);
+          ctx.quadraticCurveTo(
+            x - halfWidth, LOOP_TRACK_Y,
+            x - halfWidth + cornerRadius, LOOP_TRACK_Y
+          );
+          ctx.lineTo(x + halfWidth - cornerRadius, LOOP_TRACK_Y);
+          ctx.quadraticCurveTo(
+            x + halfWidth, LOOP_TRACK_Y,
+            x + halfWidth, LOOP_TRACK_Y - cornerRadius
+          );
+          ctx.lineTo(x + halfWidth, MAIN_TRACK_Y);
+          ctx.stroke();
+          for (const junctionX of [x - halfWidth, x + halfWidth]) {
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(junctionX - 5, MAIN_TRACK_Y - 7, 10, 14);
+          }
+        }
+      }
+
+      ctx.fillStyle = '#fff';
+      for (const boundary of sectionBoundaries.slice(1, -1)) {
+        const x = 20 + boundary * scale;
+        ctx.fillRect(x - 5, MAIN_TRACK_Y - 7, 10, 14);
+      }
+
+      for (let index = 0; index < stationCount; index++) {
+        const x = 20 + stationPosition(index) * scale;
+        const color = expressStops.includes(index) ? '#15966a' : '#17243a';
+        ctx.fillStyle = color;
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(x, MAIN_TRACK_Y, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#17243a';
+        ctx.font = '600 13px Inter, "Avenir Next", Avenir, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(String(index + 1), x, 170);
+      }
+      ctx.fillStyle = '#43536a';
+      ctx.font = '600 12px Inter, "Avenir Next", Avenir, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('Station number', 450, 200);
+      ctx.textAlign = 'start';
+      for (const train of trains) {
+        if (time < train.startTime || train.track === 'waitingStart') continue;
+        ctx.fillStyle = train.held ? '#d84856' : train.color;
+        const trainWidth = Math.max(20, TRAIN_LENGTH * scale);
+        let stationX = 20 + train.pos * scale;
+        let x = stationX;
+        let centerY = MAIN_TRACK_Y;
+        if (['enteringLoop', 'loop', 'approachingLoopExit', 'waitingLoopExit',
+             'leavingLoop'].includes(train.track)) {
+          const point = loopTrainPoint(train, scale, halfWidth);
+          x = point.x;
+          centerY = point.y;
+        }
+        const trainHeight = 10;
+        ctx.beginPath();
+        ctx.roundRect(
+          x - trainWidth / 2, centerY - trainHeight / 2,
+          trainWidth, trainHeight, trainHeight / 2
+        );
+        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+        ctx.fillStyle = 'rgb(255 255 255 / 88%)';
+        ctx.beginPath();
+        ctx.arc(x + trainWidth * 0.27, centerY, 1.8, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    form.addEventListener('submit', event => {
+      event.preventDefault();
+      restart();
+    });
+
+    document.addEventListener('keydown', event => {
+      if (event.repeat ||
+          (event.target instanceof HTMLElement &&
+           event.target.closest('input, textarea, select'))) return;
+      if (event.code === 'KeyR') {
+        event.preventDefault();
+        restart();
+      } else if (event.code === 'Space') {
+        event.preventDefault();
+        paused = !paused;
+        status.textContent = paused ? 'Paused' : 'Running';
+        status.className = paused ? 'status paused' : 'status running';
+      } else if (event.code === 'ArrowLeft' || event.code === 'ArrowRight') {
+        event.preventDefault();
+        paused = true;
+        status.textContent = 'Paused';
+        status.className = 'status paused';
+        for (let count = 0; count < 5; count++) {
+          if (event.code === 'ArrowLeft') {
+            if (historyIndex === 0) break;
+            restoreHistory(historyIndex - 1);
+          } else if (historyIndex < history.length - 1) {
+            restoreHistory(historyIndex + 1);
+          } else {
+            step();
+          }
+        }
+        draw();
+      }
+    });
+
+    restart();
+    function loop() {
+      for (let i = 0; i < STEPS_PER_FRAME && !paused; i++) step();
+      draw();
+      requestAnimationFrame(loop);
+    }
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>
